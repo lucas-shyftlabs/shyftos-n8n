@@ -50,16 +50,17 @@ export function getOutputParserSchema(
  *
  * @param ctx - The execution context
  * @param itemIndex - The current item index
- * @returns A HumanMessage containing the binary image messages.
+ * @returns A HumanMessage containing the binary image, pdf and text messages.
  */
 export async function extractBinaryMessages(
 	ctx: IExecuteFunctions,
 	itemIndex: number,
 ): Promise<HumanMessage> {
 	const binaryData = ctx.getInputData()?.[itemIndex]?.binary ?? {};
+
 	const binaryMessages = await Promise.all(
 		Object.values(binaryData)
-			.filter((data) => data.mimeType.startsWith('image/'))
+			.filter((data) => data.mimeType.startsWith('image/') || data.mimeType === 'application/pdf')
 			.map(async (data) => {
 				let binaryUrlString: string;
 
@@ -77,14 +78,40 @@ export async function extractBinaryMessages(
 						: `data:${data.mimeType};base64,${data.data}`;
 				}
 
+				// Return different message types based on the mime type
+				if (data.mimeType.startsWith('image/')) {
+					ctx.logger.debug('Returning image message');
+					return {
+						type: 'image_url',
+						image_url: {
+							url: binaryUrlString,
+						},
+					};
+				} else if (data.mimeType === 'application/pdf') {
+					// Extract filename from the binary data or use a default
+					const filename = data.fileName ?? 'document.pdf';
+
+					// For PDFs, we need to keep the full data URL format
+					// OpenAI API expects: data:application/pdf;base64,SGVsbG8sIFdvcmxkIQ==
+					ctx.logger.debug('Returning PDF file message', { filename });
+					return {
+						type: 'file',
+						file: {
+							filename,
+							file_data: binaryUrlString, // Use the complete data URL
+						},
+					};
+				}
+
+				// Fallback for any other mime types (should not happen due to filter)
+				ctx.logger.debug('Returning fallback text message for unknown mime type');
 				return {
-					type: 'image_url',
-					image_url: {
-						url: binaryUrlString,
-					},
+					type: 'text',
+					text: `Binary Document (${data.mimeType}): ${binaryUrlString}`,
 				};
 			}),
 	);
+
 	return new HumanMessage({
 		content: [...binaryMessages],
 	});
