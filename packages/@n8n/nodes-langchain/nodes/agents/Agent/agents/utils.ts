@@ -42,3 +42,24 @@ export async function checkForStructuredTools(
 		);
 	}
 }
+export async function sendToSSE(
+	sseEndpoint: string,
+	data: Record<string, unknown>,
+	done: boolean,
+): Promise<void> {
+	try {
+		const _ = fetch(sseEndpoint, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				chunk: typeof data === 'string' ? data : data,
+				done,
+			}),
+		});
+	} catch (error) {
+		console.error('Error sending to SSE endpoint:', error);
+		throw error;
+	}
+}

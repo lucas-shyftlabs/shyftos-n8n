@@ -401,6 +401,31 @@ export class Agent implements INodeType {
 				},
 			},
 			{
+				displayName: 'Send Progress as SSE',
+				name: 'sseProgress',
+				type: 'boolean',
+				default: false,
+				noDataExpression: true,
+				displayOptions: {
+					show: {
+						agent: ['toolsAgent'],
+					},
+				},
+			},
+			{
+				displayName: 'SSE Endpoint',
+				name: 'sseEndpoint',
+				type: 'string',
+				default: '',
+				placeholder: 'https://your-sse-endpoint.com/progress',
+				displayOptions: {
+					show: {
+						agent: ['toolsAgent'],
+						sseProgress: [true],
+					},
+				},
+			},
+			{
 				displayName: 'For more reliable structured output parsing, consider using the Tools agent',
 				name: 'notice',
 				type: 'notice',

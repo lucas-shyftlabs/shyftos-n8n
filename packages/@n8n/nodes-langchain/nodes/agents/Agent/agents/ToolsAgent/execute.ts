@@ -23,6 +23,7 @@ import {
 } from '@utils/output_parsers/N8nOutputParser';
 
 import { SYSTEM_MESSAGE } from './prompt';
+import { sendToSSE } from '../utils';
 
 /* -----------------------------------------------------------
    Output Parser Helper
@@ -246,7 +247,7 @@ export function handleParsedStepOutput(
  * @returns The parsed steps with the final output
  */
 export const getAgentStepsParser =
-	(outputParser?: N8nOutputParser, memory?: BaseChatMemory) =>
+	(outputParser?: N8nOutputParser, memory?: BaseChatMemory, sseEndpoint?: string) =>
 	async (steps: AgentFinish | AgentAction[]): Promise<AgentFinish | AgentAction[]> => {
 		// Check if the steps contain the 'format_final_json_response' tool invocation.
 		if (Array.isArray(steps)) {
@@ -435,6 +436,7 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 		try {
 			const model = await getChatModel(this);
 			const memory = await getOptionalMemory(this);
+			const sseEndpoint = this.getNodeParameter('sseEndpoint', itemIndex, '') as string;
 
 			const input = getPromptInputByType({
 				ctx: this,
@@ -472,7 +474,7 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 			// Wrap the agent with parsers and fixes.
 			const runnableAgent = RunnableSequence.from([
 				agent,
-				getAgentStepsParser(outputParser, memory),
+				getAgentStepsParser(outputParser, memory, sseEndpoint),
 				fixEmptyContentMessage,
 			]);
 			const executor = AgentExecutor.fromAgentAndTools({
@@ -491,7 +493,26 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 					formatting_instructions:
 						'IMPORTANT: For your response to user, you MUST use the `format_final_json_response` tool with your complete answer formatted according to the required schema. Do not attempt to format the JSON manually - always use this tool. Your response will be rejected if it is not properly formatted through this tool. Only use this tool once you are ready to provide your final answer.',
 				},
-				{ signal: this.getExecutionCancelSignal() },
+				{
+					signal: this.getExecutionCancelSignal(),
+					callbacks: sseEndpoint
+						? [
+								// Can add handler to as many callbacks as needed
+								{
+									handleAgentAction: async (action) => {
+										if (action) {
+											await sendToSSE(sseEndpoint, action, false);
+										}
+									},
+									handleAgentEnd: async (finish) => {
+										if (finish.returnValues) {
+											await sendToSSE(sseEndpoint, finish.returnValues, false);
+										}
+									},
+								},
+							]
+						: [],
+				},
 			);
 
 			// If memory and outputParser are connected, parse the output.
