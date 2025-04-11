@@ -506,7 +506,7 @@ export async function toolsAgentExecute(this: IExecuteFunctions): Promise<INodeE
 									},
 									handleAgentEnd: async (finish) => {
 										if (finish.returnValues) {
-											await sendToSSE(sseEndpoint, finish.returnValues, false);
+											await sendToSSE(sseEndpoint, finish.returnValues, true);
 										}
 									},
 								},
